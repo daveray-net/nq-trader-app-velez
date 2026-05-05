@@ -1,0 +1,12 @@
+yfinance
+pandas
+pandas-ta
+sqlalchemy
+datasets
+schedule
+tzdata
+tabulate
+backtesting
+matplotlib
+mplfinance
+
