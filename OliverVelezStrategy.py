@@ -21,6 +21,9 @@ class OliverVelezStrategy(Strategy):
     narrow_short  = 1.8
     stretch_short = 3.5
 
+    size = 7
+
+
     def init(self):
         super().init()
         self.sma20 = self.I(lambda x: pd.Series(x).rolling(20).mean(), self.data.Close)
@@ -33,6 +36,7 @@ class OliverVelezStrategy(Strategy):
 
         self.atr = self.I(get_atr, self.data.High, self.data.Low, self.data.Close)
         self.added, self.pushes, self.stop_price = False, 0, 0
+        self.entry_bar_size=0
 
     def get_long_facts(self):
         s20, s200, atr = self.sma20[-1], self.sma200[-1], self.atr[-1]
@@ -46,8 +50,10 @@ class OliverVelezStrategy(Strategy):
         is_stretched = (s20 - c_close) > (3.5 * atr)
 
         if is_elephant and is_narrow and c_close > max(s20, s200):
+            self.entry_bar_size = body
             return 'BREAKOUT_LONG', c_low - 0.25
         if is_elephant and is_stretched:
+            self.entry_bar_size = body
             return 'SNAPBACK_LONG', c_low - 0.25
         return None, 0
 
@@ -65,8 +71,10 @@ class OliverVelezStrategy(Strategy):
         is_stretched_above = (c_close - s20) > (3.5 * atr)
 
         if is_elephant and is_narrow and c_close < min(s20, s200) and not is_extended_from_200:
+            self.entry_bar_size = body
             return 'BREAKOUT_SHORT', c_high + 0.25
         if is_elephant and is_stretched_above:
+            self.entry_bar_size = body
             return 'SNAPBACK_SHORT', c_high + 0.25
         return None, 0
 
@@ -115,6 +123,21 @@ class OliverVelezStrategy(Strategy):
 ##        if is_snapback: return 'SNAPBACK_SHORT', c_high + 0.25
 ##        return None, 0
 
+    def getPreviousLow(self):
+        i=-1
+        low = self.data.Low[-1]
+        while ( low >= self.data.Low[-1] ) :
+            low = self.data.Low[i]; i = (i-1)
+        return low
+
+    def getPreviousHigh(self):
+        i=-1
+        high = self.data.High[-1]
+        while ( high <= self.data.High[-1] ) :
+            high = self.data.High[i]; i = (i-1)
+        return high
+
+
     def next(self):
         t = self.data.index[-1]
         curr_time_val = t.hour * 100 + t.minute
@@ -132,18 +155,45 @@ class OliverVelezStrategy(Strategy):
                (self.position.is_short and c_high > self.stop_price):
                 self.position.close(); return
 
+             # short and making higher highs...
+            if ( self.position.is_short and ( self.data.High[-2] < self.data.High[-1] ) ):
+                print( t, "short + higher highs: ", (self.data.High[-2] < self.data.High[-1]) )
+                self.position.close(); return
+
+            # try and exit near the high, ** early exit on first pullback **...
+            #if ( self.position.is_long and self.data.High[-1] > self.data.High[-2] ):
+            #    if ( (abs(self.data.Open[-2] - self.data.Close[-2])) > (self.atr ) ):
+            #        print(t, "YES",  self.atr[-1], abs(self.data.Open[-1] - self.data.Close[-1]), self.data.Low[-1] )
+            #        self.stop_price = self.data.Low[-1]
+            #        #self.position.close()
+            #        return
+
+            # if the current candle is retracing the previous elephant candle by more than 50% then exit
+            if ( abs(self.data.Close[-1] - self.data.Open[-1]) > (self.elephant_mult * self.atr[-1]) ):
+                if ( abs(self.data.Close[-1] - self.data.Open[-1]) > abs(self.entry_bar_size * 0.5) ):
+                    print( t,': retracement close')
+                    self.position.close(); return
+
+            # exit if current candle close crosses above or below the sma20 ...
+            if ( self.position.is_long and self.data.Close[-1] < self.sma20[-1] ) or \
+                ( self.position.is_short and self.data.Close[-1] > self.sma20[-1] ):
+                self.position.close(); return
+
+
             # Color Game Add
             if not self.added:
                 if self.position.is_long and p_close < p_open and c_high > p_high:
-                    self.buy(size=1); self.added = True
+                    self.buy(size= round(self.size / 2) ); self.added = True; self.stop_price = ( self.getPreviousLow() )
                 elif self.position.is_short and p_close > p_open and c_low < p_low:
-                    self.sell(size=1); self.added = True
+                    print(t, "self.added=True")
+                    self.sell(size= round(self.size / 2) ); self.added = True; self.stop_price = ( self.getPreviousHigh() )
 
             # 3-Push Exit
             if abs(c_close - c_open) > (1.2 * self.atr[-1]):
                 if (self.position.is_long and c_close > c_open) or (self.position.is_short and c_close < c_open):
                     self.pushes += 1
             if self.pushes >= 3: self.position.close(); return
+
 
         # --- 2. ENTRY ENGINE ---
         else:
@@ -153,10 +203,11 @@ class OliverVelezStrategy(Strategy):
 
                 if l_tag:
                     self.stop_price = l_stop
-                    self.buy(size=1, tag=l_tag)
+                    self.buy(size=self.size, tag=l_tag)
                     self.added, self.pushes = False, 1
                 elif s_tag:
                     self.stop_price = s_stop
-                    self.sell(size=1, tag=s_tag)
+                    print(t,"self.sell",s_tag)
+                    self.sell(size=self.size, tag=s_tag)
                     self.added, self.pushes = False, 1
 

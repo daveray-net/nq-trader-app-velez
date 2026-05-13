@@ -73,7 +73,9 @@ class TradeVisualizer:
 
         if trade_info:
             # Format text into a single horizontal line to fit the top margin
-            stats_text = (f"Result: {trade_info['Result']}  |  "
+            stats_text = (f"EntryTime: {trade_info['EntryTime']}  |  "
+                          f"Side: {trade_info['Side']}  |  "
+                          f"Result: {trade_info['Result']}  |  "
                           f"PnL: ${trade_info['PnL']:.2f}  |  "
                           f"Return: {trade_info['ReturnPct']:.2f}%  |  "
                           f"Duration: {trade_info['Duration']}")
@@ -112,16 +114,23 @@ class TradeVisualizer:
         # Overall Summary
         self.plot_velez_trades(data, stats, sma20_full=sma20_f, sma200_full=sma200_f, save_name='overall_trades.png')
 
+#         log_df['Side'] = log_df['Size'].apply(lambda x: 'LONG' if x > 0 else 'SHORT')
         # Individual Trades
         for i, trade in stats._trades.iterrows():
             start = trade['EntryTime'] - pd.Timedelta(hours=2)
             end = trade['ExitTime'] + pd.Timedelta(minutes=30)
+            side='LONG'
+            if(trade['Size'] < 0):
+                side = 'SHORT'
             t_info = {
+                'EntryTime': trade['EntryTime'],
+                'Side': side,
                 'Result': 'PROFIT' if trade['PnL'] > 0 else 'LOSS',
                 'PnL': trade['PnL'],
                 'ReturnPct': trade['ReturnPct'] * 100,
                 'Duration': trade['ExitTime'] - trade['EntryTime']
             }
+
             self.plot_velez_trades(data, stats, start_time=start, end_time=end,
                                    sma20_full=sma20_f, sma200_full=sma200_f,
                                    save_name=f'trade_{i+1}.png', trade_info=t_info)

@@ -4,7 +4,7 @@ from BacktestEngine import BacktestEngine
 from TradeVisualizer import TradeVisualizer
 
 # 1. Fetch
-#dm = DataManager(ticker="ES=F")
+#dm = DataManager(ticker="ES=F", filename="./data/ES_futures_data.tsf")
 dm = DataManager(ticker="NQ=F", filename="./data/NQ_futures_data.tsf")
 
 data = dm.fetch_and_clean()

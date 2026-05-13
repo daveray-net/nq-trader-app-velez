@@ -3,7 +3,7 @@ from backtesting import Backtest
 import os
 
 class BacktestEngine:
-    def __init__(self, data, strategy_class, cash=100000, commission=0.0002):
+    def __init__(self, data, strategy_class, cash=250000, commission=0.0002):
         self.bt = Backtest(data, strategy_class, cash=cash, commission=commission)
         self.data = data
         self.stats = None
