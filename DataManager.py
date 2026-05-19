@@ -42,4 +42,7 @@ class DataManager:
         # Standardize for Backtesting Engine
         df.index = pd.to_datetime(df.index, utc=True).tz_convert('US/Eastern').tz_localize(None)
         df.index.name = 'Datetime'
+
+        print(df)
+
         return df
