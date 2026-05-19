@@ -4,10 +4,18 @@ from backtesting import Strategy
 import os
 
 # MASTER SWITCHES
-START_HOUR = int(os.getenv('TRADING_START_HOUR', 9))
-START_MIN  = int(os.getenv('TRADING_START_MIN', 30))
-END_HOUR   = int(os.getenv('TRADING_END_HOUR', 16))
-END_MIN    = int(os.getenv('TRADING_END_MIN', 0))
+# set environment variables
+# export TRADING_END_DATE="2026-05-13"
+# export TRADING_START_DATE="2026-05-12"
+# export TRADING_TIME_END="16:00:00"
+# export TRADING_TIME_START="18:00:00"
+#
+# remove environmnet variables
+# unset TRADING_END_DATE
+# unset TRADING_START_DATE
+# unset TRADING_TIME_END
+# unset TRADING_TIME_START
+
 
 class OliverVelezStrategy(Strategy):
     # Asymmetrical Parameters for independent tuning
@@ -21,6 +29,7 @@ class OliverVelezStrategy(Strategy):
     narrow_short  = 1.8
     stretch_short = 3.5
 
+    #number of contracts
     size = 7
 
 
@@ -37,6 +46,89 @@ class OliverVelezStrategy(Strategy):
         self.atr = self.I(get_atr, self.data.High, self.data.Low, self.data.Close)
         self.added, self.pushes, self.stop_price = False, 0, 0
         self.entry_bar_size=0
+
+        # --- HOISTED ENVIRONMENT DATE LOOKUPS (RUNS ONCE) ---
+        default_start_date = self.data.df.index[0]
+        default_end_date = self.data.df.index[-1]
+
+        env_start_date = os.environ.get("TRADING_START_DATE")
+        env_end_date = os.environ.get("TRADING_END_DATE")
+
+        self._start_date_bound = pd.to_datetime(env_start_date) if env_start_date else default_start_date
+        self._end_date_bound = pd.to_datetime(env_end_date) if env_end_date else default_end_date
+
+        # --- HOISTED ENVIRONMENT TIME LOOKUPS (RUNS ONCE) ---
+        default_time_start = pd.Timestamp("09:30:00").time()
+        default_time_end = pd.Timestamp("16:00:00").time()
+
+        env_time_start = os.environ.get("TRADING_TIME_START")
+        env_time_end = os.environ.get("TRADING_TIME_END")
+
+        self._time_start_bound = pd.Timestamp(env_time_start).time() if env_time_start else default_time_start
+        self._time_end_bound = pd.Timestamp(env_time_end).time() if env_time_end else default_time_end
+
+
+    def is_in_trading_window(self) -> bool:
+        # Get the timestamp of the current bar (super fast)
+        current_datetime = self.data.index[-1]
+
+        # Fast comparison using pre-calculated bounds
+        is_within_date_range = self._start_date_bound <= current_datetime <= self._end_date_bound
+
+        current_time_of_day = current_datetime.time()
+        if self._time_start_bound <= self._time_end_bound:
+            is_within_time_window = self._time_start_bound <= current_time_of_day <= self._time_end_bound
+        else:
+            is_within_time_window = current_time_of_day >= self._time_start_bound or current_time_of_day <= self._time_end_bound
+
+        return bool(is_within_date_range and is_within_time_window)
+
+
+##    def is_in_trading_window(self) -> bool:
+##        # --- 1. SET UP THE DATE WINDOW BOUNDS ---
+##        # Fallback default: Access the true full dataset bounds via .df
+##        default_start_date = self.data.df.index[0]
+##        default_end_date = self.data.df.index[-1]
+
+##        # Override with environment variables if present, otherwise use defaults
+##        env_start_date = os.environ.get("TRADING_START_DATE")
+##        env_end_date = os.environ.get("TRADING_END_DATE")
+
+##        start_date_bound = pd.to_datetime(env_start_date) if env_start_date else default_start_date
+##        end_date_bound = pd.to_datetime(env_end_date) if env_end_date else default_end_date
+
+##        # --- 2. SET UP THE SESSION TIME WINDOW ---
+##        # Fallback default: Standard New York session (9:30 AM to 4:00 PM)
+##        default_time_start = pd.Timestamp("09:30:00").time()
+##        default_time_end = pd.Timestamp("16:00:00").time()
+
+##        # Override with environment variables if present
+##        env_time_start = os.environ.get("TRADING_TIME_START")
+##        env_time_end = os.environ.get("TRADING_TIME_END")
+
+##        time_start_bound = pd.Timestamp(env_time_start).time() if env_time_start else default_time_start
+##        time_end_bound = pd.Timestamp(env_time_end).time() if env_time_end else default_time_end
+
+##        # --- 3. EVALUATE THE CURRENT BAR ---
+##        # Get the timestamp of the current bar in the backtest loop
+##        current_datetime = self.data.index[-1]
+
+##        # Check if current bar date is within date bounds
+##        is_within_date_range = start_date_bound <= current_datetime <= end_date_bound
+
+##        # Check if current bar clock time is within session bounds
+##        current_time_of_day = current_datetime.time()
+##        if time_start_bound <= time_end_bound:
+##            # Standard daytime window (e.g., NY Session: 09:30 <= 13:00 <= 16:00)
+##            is_within_time_window = time_start_bound <= current_time_of_day <= time_end_bound
+##        else:
+##            # Overnight cross-midnight window (e.g., Globex open to NY close over midnight)
+##            is_within_time_window = current_time_of_day >= time_start_bound or current_time_of_day <= time_end_bound
+
+##        # --- 4. RETURN RESULT ---
+##        return bool(is_within_date_range and is_within_time_window)
+
+
 
     def get_long_facts(self):
         s20, s200, atr = self.sma20[-1], self.sma200[-1], self.atr[-1]
@@ -139,9 +231,21 @@ class OliverVelezStrategy(Strategy):
 
 
     def next(self):
+##        # 3. Dynamic date fallbacks from the data file index
+##        start_date = ENV_START_DATE if ENV_START_DATE else self.data.index[0].strftime('%Y-%m-%d')
+##        end_date   = ENV_END_DATE if ENV_END_DATE else self.data.index[-1].strftime('%Y-%m-%d')
+
+##        # Create concrete start and end boundaries
+##        window_start = pd.Timestamp(f"{start_date} {START_HOUR:02d}:{START_MIN:02d}:00")
+##        window_end   = pd.Timestamp(f"{end_date} {END_HOUR:02d}:{END_MIN:02d}:00")
+
         t = self.data.index[-1]
-        curr_time_val = t.hour * 100 + t.minute
-        in_window = (START_HOUR * 100 + START_MIN) <= curr_time_val <= (END_HOUR * 100 + END_MIN)
+
+##        # Direct timestamp evaluation checks both date and time simultaneously
+##        in_window = window_start <= t <= window_end
+
+        #curr_time_val = t.hour * 100 + t.minute
+        #in_window = (START_HOUR * 100 + START_MIN) <= curr_time_val <= (END_HOUR * 100 + END_MIN)
 
         # --- 1. POSITION MANAGEMENT ---
         if self.position:
@@ -197,7 +301,7 @@ class OliverVelezStrategy(Strategy):
 
         # --- 2. ENTRY ENGINE ---
         else:
-            if in_window:
+            if self.is_in_trading_window():
                 l_tag, l_stop = self.get_long_facts()
                 s_tag, s_stop = self.get_short_facts()
 
