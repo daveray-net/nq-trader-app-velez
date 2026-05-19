@@ -42,6 +42,9 @@ class BacktestEngine:
         log_df['Side'] = log_df['Size'].apply(lambda x: 'LONG' if x > 0 else 'SHORT')
         log_df['Return%'] = (log_df['ReturnPct'] * 100).round(2)
         log_df['PnL'] = log_df['PnL'].round(2)
+        log_df['TotalPnL'] = log_df['PnL'].cumsum().round(2)
 
-        return log_df[['EntryTime', 'ExitTime', 'Side', 'EntryPrice', 'ExitPrice', 'PnL', 'Return%']]
+        return log_df[['EntryTime', 'ExitTime', 'Side', 'EntryPrice', 'ExitPrice', 'PnL', 'Return%', 'TotalPnL']]
+
+
 
