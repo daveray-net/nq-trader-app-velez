@@ -68,9 +68,7 @@ class OliverVelezStrategy(Strategy):
         self._time_end_bound = pd.Timestamp(env_time_end).time() if env_time_end else default_time_end
 
 
-    def is_in_trading_window(self) -> bool:
-        # Get the timestamp of the current bar (super fast)
-        current_datetime = self.data.index[-1]
+    def is_in_trading_window(self, current_datetime) -> bool:
 
         # Fast comparison using pre-calculated bounds
         is_within_date_range = self._start_date_bound <= current_datetime <= self._end_date_bound
@@ -83,56 +81,8 @@ class OliverVelezStrategy(Strategy):
 
         return bool(is_within_date_range and is_within_time_window)
 
-
-##    def is_in_trading_window(self) -> bool:
-##        # --- 1. SET UP THE DATE WINDOW BOUNDS ---
-##        # Fallback default: Access the true full dataset bounds via .df
-##        default_start_date = self.data.df.index[0]
-##        default_end_date = self.data.df.index[-1]
-
-##        # Override with environment variables if present, otherwise use defaults
-##        env_start_date = os.environ.get("TRADING_START_DATE")
-##        env_end_date = os.environ.get("TRADING_END_DATE")
-
-##        start_date_bound = pd.to_datetime(env_start_date) if env_start_date else default_start_date
-##        end_date_bound = pd.to_datetime(env_end_date) if env_end_date else default_end_date
-
-##        # --- 2. SET UP THE SESSION TIME WINDOW ---
-##        # Fallback default: Standard New York session (9:30 AM to 4:00 PM)
-##        default_time_start = pd.Timestamp("09:30:00").time()
-##        default_time_end = pd.Timestamp("16:00:00").time()
-
-##        # Override with environment variables if present
-##        env_time_start = os.environ.get("TRADING_TIME_START")
-##        env_time_end = os.environ.get("TRADING_TIME_END")
-
-##        time_start_bound = pd.Timestamp(env_time_start).time() if env_time_start else default_time_start
-##        time_end_bound = pd.Timestamp(env_time_end).time() if env_time_end else default_time_end
-
-##        # --- 3. EVALUATE THE CURRENT BAR ---
-##        # Get the timestamp of the current bar in the backtest loop
-##        current_datetime = self.data.index[-1]
-
-##        # Check if current bar date is within date bounds
-##        is_within_date_range = start_date_bound <= current_datetime <= end_date_bound
-
-##        # Check if current bar clock time is within session bounds
-##        current_time_of_day = current_datetime.time()
-##        if time_start_bound <= time_end_bound:
-##            # Standard daytime window (e.g., NY Session: 09:30 <= 13:00 <= 16:00)
-##            is_within_time_window = time_start_bound <= current_time_of_day <= time_end_bound
-##        else:
-##            # Overnight cross-midnight window (e.g., Globex open to NY close over midnight)
-##            is_within_time_window = current_time_of_day >= time_start_bound or current_time_of_day <= time_end_bound
-
-##        # --- 4. RETURN RESULT ---
-##        return bool(is_within_date_range and is_within_time_window)
-
-
-
-    def get_long_facts(self):
-        s20, s200, atr = self.sma20[-1], self.sma200[-1], self.atr[-1]
-        c_close, c_open, c_low = self.data.Close[-1], self.data.Open[-1], self.data.Low[-1]
+    def get_long_facts(self, s20, s200, atr, c_close, c_open, c_low):
+        # ⚡ PASSIVE LOOKUPS: No array indexing math is performed inside this block
         body = c_close - c_open
         gap = abs(s20 - s200)
 
@@ -149,9 +99,8 @@ class OliverVelezStrategy(Strategy):
             return 'SNAPBACK_LONG', c_low - 0.25
         return None, 0
 
-    def get_short_facts(self):
-        s20, s200, atr = self.sma20[-1], self.sma200[-1], self.atr[-1]
-        c_close, c_open, c_high = self.data.Close[-1], self.data.Open[-1], self.data.High[-1]
+    def get_short_facts(self, s20, s200, atr, c_close, c_open, c_high):
+        # ⚡ PASSIVE LOOKUPS: Perfect for standard WebSocket live data streams
         body = c_open - c_close
         gap = abs(s20 - s200)
 
@@ -170,51 +119,6 @@ class OliverVelezStrategy(Strategy):
             return 'SNAPBACK_SHORT', c_high + 0.25
         return None, 0
 
-
-
-##    def get_long_facts(self):
-##        """Pure Bullish Logic - Tuned for Breakouts & Snap-backs."""
-##        s20, s200, atr = self.sma20[-1], self.sma200[-1], self.atr[-1]
-##        c_close, c_open, c_low = self.data.Close[-1], self.data.Open[-1], self.data.Low[-1]
-##        body = c_close - c_open
-##        gap = abs(s20 - s200)
-
-##        is_elephant = body > (self.elephant_mult * atr)
-##        is_narrow = gap < (self.narrow_long * atr)
-##        is_stretched = (s20 - c_close) > (self.stretch_long * atr)
-
-##        # Signal A: Narrow Breakout
-##        is_breakout = is_elephant and is_narrow and c_close > max(s20, s200)
-##        # Signal B: Wide Snap-back
-##        is_snapback = is_elephant and is_stretched
-
-##        if is_breakout: return 'BREAKOUT_LONG', c_low - 0.25
-##        if is_snapback: return 'SNAPBACK_LONG', c_low - 0.25
-##        return None, 0
-
-##    def get_short_facts(self):
-##        """Pure Bearish Logic - Stricter 'Creme de la Creme' only."""
-##        s20, s200, atr = self.sma20[-1], self.sma200[-1], self.atr[-1]
-##        c_close, c_open, c_high = self.data.Close[-1], self.data.Open[-1], self.data.High[-1]
-##        body = c_open - c_close # Red Bar
-##        gap = abs(s20 - s200)
-
-##        is_elephant = body > (self.elephant_mult * atr)
-##        is_narrow = gap < (self.narrow_short * atr) # Stricter coil
-
-##        # ANTI-CHASE: If we are already 3.5 ATRs below the 200 SMA, do NOT breakout
-##        is_extended_from_200 = (s200 - c_close) > (3.5 * atr)
-##        is_stretched_above = (c_close - s20) > (self.stretch_short * atr)
-
-##        # Signal A: Narrow Breakout (Only if NOT extended/chasing)
-##        is_breakout = is_elephant and is_narrow and c_close < min(s20, s200) and not is_extended_from_200
-##        # Signal B: Wide Snap-back
-##        is_snapback = is_elephant and is_stretched_above
-
-##        if is_breakout: return 'BREAKOUT_SHORT', c_high + 0.25
-##        if is_snapback: return 'SNAPBACK_SHORT', c_high + 0.25
-##        return None, 0
-
     def getPreviousLow(self):
         i=-1
         low = self.data.Low[-1]
@@ -231,28 +135,33 @@ class OliverVelezStrategy(Strategy):
 
 
     def next(self):
-##        # 3. Dynamic date fallbacks from the data file index
-##        start_date = ENV_START_DATE if ENV_START_DATE else self.data.index[0].strftime('%Y-%m-%d')
-##        end_date   = ENV_END_DATE if ENV_END_DATE else self.data.index[-1].strftime('%Y-%m-%d')
+        # 1. Capture the single current datetime stamp
+        current_dt = self.data.index[-1]
 
-##        # Create concrete start and end boundaries
-##        window_start = pd.Timestamp(f"{start_date} {START_HOUR:02d}:{START_MIN:02d}:00")
-##        window_end   = pd.Timestamp(f"{end_date} {END_HOUR:02d}:{END_MIN:02d}:00")
+        # 2. Extract values for the active candle EXACTLY ONCE per loop
+        # This completely stops expensive multi-layered index looking backwards ([-1])
+        close_val = self.data.Close[-1]
+        open_val = self.data.Open[-1]
+        high_val = self.data.High[-1]
+        low_val = self.data.Low[-1]
 
-        t = self.data.index[-1]
+        s20_val = self.sma20[-1]
+        s200_val = self.sma200[-1]
+        atr_val = self.atr[-1]
 
-##        # Direct timestamp evaluation checks both date and time simultaneously
-##        in_window = window_start <= t <= window_end
+        c_low, c_high, c_close, c_open = self.data.Low[-1], self.data.High[-1], self.data.Close[-1], self.data.Open[-1]
+        p_close, p_open, p_high, p_low = self.data.Close[-2], self.data.Open[-2], self.data.High[-2], self.data.Low[-2]
 
-        #curr_time_val = t.hour * 100 + t.minute
-        #in_window = (START_HOUR * 100 + START_MIN) <= curr_time_val <= (END_HOUR * 100 + END_MIN)
-
+        # 3. Handle Exits
         # --- 1. POSITION MANAGEMENT ---
-        if self.position:
-            if t.hour >= 16: self.position.close(); return
 
-            c_low, c_high, c_close, c_open = self.data.Low[-1], self.data.High[-1], self.data.Close[-1], self.data.Open[-1]
-            p_close, p_open, p_high, p_low = self.data.Close[-2], self.data.Open[-2], self.data.High[-2], self.data.Low[-2]
+        # end of nysession close...
+        if self.position:
+            if current_dt.hour >= 16:
+                self.position.close()
+                return
+
+            # ... execute your remaining trailing stop management rules ...
 
             # Hard Stop
             if (self.position.is_long and c_low < self.stop_price) or \
@@ -261,13 +170,13 @@ class OliverVelezStrategy(Strategy):
 
              # short and making higher highs...
             if ( self.position.is_short and ( self.data.High[-2] < self.data.High[-1] ) ):
-                print( t, "short + higher highs: ", (self.data.High[-2] < self.data.High[-1]) )
+                print(current_dt, "short + higher highs: ", (self.data.High[-2] < self.data.High[-1]) )
                 self.position.close(); return
 
             # try and exit near the high, ** early exit on first pullback **...
             #if ( self.position.is_long and self.data.High[-1] > self.data.High[-2] ):
             #    if ( (abs(self.data.Open[-2] - self.data.Close[-2])) > (self.atr ) ):
-            #        print(t, "YES",  self.atr[-1], abs(self.data.Open[-1] - self.data.Close[-1]), self.data.Low[-1] )
+            #        print(current_dt, "YES",  self.atr[-1], abs(self.data.Open[-1] - self.data.Close[-1]), self.data.Low[-1] )
             #        self.stop_price = self.data.Low[-1]
             #        #self.position.close()
             #        return
@@ -275,7 +184,7 @@ class OliverVelezStrategy(Strategy):
             # if the current candle is retracing the previous elephant candle by more than 50% then exit
             if ( abs(self.data.Close[-1] - self.data.Open[-1]) > (self.elephant_mult * self.atr[-1]) ):
                 if ( abs(self.data.Close[-1] - self.data.Open[-1]) > abs(self.entry_bar_size * 0.5) ):
-                    print( t,': retracement close')
+                    print(current_dt,': retracement close')
                     self.position.close(); return
 
             # exit if current candle close crosses above or below the sma20 ...
@@ -289,7 +198,7 @@ class OliverVelezStrategy(Strategy):
                 if self.position.is_long and p_close < p_open and c_high > p_high:
                     self.buy(size= round(self.size / 2) ); self.added = True; self.stop_price = ( self.getPreviousLow() )
                 elif self.position.is_short and p_close > p_open and c_low < p_low:
-                    print(t, "self.added=True")
+                    print(current_dt, "self.added=True")
                     self.sell(size= round(self.size / 2) ); self.added = True; self.stop_price = ( self.getPreviousHigh() )
 
             # 3-Push Exit
@@ -301,9 +210,10 @@ class OliverVelezStrategy(Strategy):
 
         # --- 2. ENTRY ENGINE ---
         else:
-            if self.is_in_trading_window():
-                l_tag, l_stop = self.get_long_facts()
-                s_tag, s_stop = self.get_short_facts()
+            if self.is_in_trading_window(current_dt):
+                # Pass pre-extracted scalar values into your facts functions
+                l_tag, l_stop = self.get_long_facts(s20_val, s200_val, atr_val, close_val, open_val, low_val)
+                s_tag, s_stop = self.get_short_facts(s20_val, s200_val, atr_val, close_val, open_val, high_val)
 
                 if l_tag:
                     self.stop_price = l_stop
@@ -311,7 +221,7 @@ class OliverVelezStrategy(Strategy):
                     self.added, self.pushes = False, 1
                 elif s_tag:
                     self.stop_price = s_stop
-                    print(t,"self.sell",s_tag)
+                    print(current_dt,"self.sell",s_tag)
                     self.sell(size=self.size, tag=s_tag)
                     self.added, self.pushes = False, 1
 
