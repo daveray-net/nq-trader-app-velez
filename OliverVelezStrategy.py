@@ -14,6 +14,7 @@ class OliverVelezStrategy(Strategy):
     size = None
 
     def init(self):
+        """Sets up indicator arrays and maps Single-Source properties from the Engine."""
         super().init()
         self.engine = OliverVelezEngine()
 
@@ -35,7 +36,7 @@ class OliverVelezStrategy(Strategy):
 
         self.added, self.pushes, self.stop_price = False, 0, 0
 
-        # Hoist Environment Window Constraints
+        # Hoist Environment Window Constraints (FIXED WITH singular element lookups)
         default_start_date = self.data.df.index[0]
         default_end_date = self.data.df.index[-1]
         env_start_date = os.environ.get("TRADING_START_DATE")
@@ -80,7 +81,7 @@ class OliverVelezStrategy(Strategy):
                 self.engine.reset_position_state()
             return
 
-        # Fixed parameter routing layout
+        # ⚡ FIXED DATA PIPELINE: Forwards finder functions directly to support Color Game trail stops
         action, stop_price, tag = self.engine.process_bar(
             has_position=bool(self.position),
             is_long=bool(self.position.is_long if self.position else False),
@@ -99,10 +100,16 @@ class OliverVelezStrategy(Strategy):
         if action == 'CLOSE':
             self.position.close()
         elif action == 'BUY_INITIAL':
+            self.stop_price = stop_price
             self.buy(size=self.size, tag=tag)
+            self.added, self.pushes = False, 1
         elif action == 'SELL_INITIAL':
+            self.stop_price = stop_price
             self.sell(size=self.size, tag=tag)
+            self.added, self.pushes = False, 1
         elif action == 'BUY_ADD':
             self.buy(size=round(self.size / 2))
+            self.stop_price = stop_price # Captures true getPreviousLow calculated float
         elif action == 'SELL_ADD':
             self.sell(size=round(self.size / 2))
+            self.stop_price = stop_price # Captures true getPreviousHigh calculated float
