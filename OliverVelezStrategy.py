@@ -73,6 +73,24 @@ class OliverVelezStrategy(Strategy):
         return high
 
     def next(self):
+
+        ######### begin debug info
+        # 1. Access the current bar data and calculations
+        current_time = self.data.index[-1]
+        current_close = self.data.Close[-1]
+
+        # 2. Get your engine's moving averages (adjust variable names to match your engine)
+        # Assuming your strategy wrapper copies engine series like self.ma20 or self.sma200:
+        ma20_val = self.sma20[-1] if hasattr(self, 'sma20') else None
+        sma200_val = self.sma200[-1] if hasattr(self, 'sma200') else None
+
+        print(f"\n[STRATEGY LOG] --- Telemetry Scan: {current_time} ---")
+        print(f"  XXX Price: {current_close:.2f} | 20 MA: {f'{ma20_val:.2f}' if ma20_val else 'N/A'} | 200 SMA: {f'{sma200_val:.2f}' if sma200_val else 'N/A'}")
+        ######### end debug info
+
+
+
+        ############################################
         current_dt = self.data.index[-1]
 
         if not self.is_in_trading_window(current_dt):
@@ -96,6 +114,40 @@ class OliverVelezStrategy(Strategy):
             prev_high_finder_func=self.getPreviousHigh,
             prev_low_finder_func=self.getPreviousLow
         )
+
+
+        ######### begin debug info
+
+        ######### begin temporary attribute mapper
+        print("\n[DIAGNOSTIC] Listing all active engine properties:")
+        engine_attributes = [attr for attr in dir(self.engine) if not attr.startswith('__') and not callable(getattr(self.engine, attr))]
+        print(f"  Available Engine Variables: {engine_attributes}")
+        ######### end temporary attribute mapper
+
+        # 1. Print the immediate telemetry results returned from the active bar process
+        print(f"\n[STRATEGY LOG] --- Telemetry Scan: {current_dt} ---")
+        print(f"  Price: {self.data.Close[-1]:.2f} | 20 MA: {self.sma20[-1]:.2f} | 200 SMA: {self.sma200[-1]:.2f}")
+        print(f"  [Bar Action Evaluation] Action: {action} | Stop Price: {stop_price} | Tag: {tag}")
+
+        # 2. Safely inspect state attributes inside your engine object instance
+        if hasattr(self, 'engine'):
+            # Using getattr with defaults prevents AttributeError crashes if names differ slightly
+            bias_long = getattr(self.engine, 'bias_long', None)
+            if bias_long is None:
+                # Check for common alternative naming conventions if the first check returns None
+                bias_long = getattr(self.engine, 'long_bias', 'N/A')
+
+            print(f"  [Engine State] Bias Long: {bias_long}")
+            print(f"  [Engine State] Overextended: {getattr(self.engine, 'is_overextended', getattr(self.engine, 'overextended', 'N/A'))}")
+            print(f"  [Engine State] Push Count: {getattr(self.engine, 'push_count', getattr(self.engine, 'pushes', 'N/A'))}")
+            print(f"  [Engine State] Last Signal: {getattr(self.engine, 'signal_fired', getattr(self.engine, 'last_signal', 'N/A'))}")
+
+        print("-" * 50)
+        ######### end debug info
+
+
+
+
 
         if action == 'CLOSE':
             self.position.close()

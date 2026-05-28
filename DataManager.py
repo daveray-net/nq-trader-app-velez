@@ -17,7 +17,10 @@ class DataManager:
 
             last_ts = df.index[-1]
             print(f"Updating {self.ticker} from {last_ts}...")
-            new_data = yf.download(self.ticker, start=last_ts, interval=interval, auto_adjust=True)
+            new_data = yf.download(self.ticker,
+                                   start=last_ts,
+                                   interval=interval,
+                                   auto_adjust=True)
 
             if not new_data.empty:
                 if isinstance(new_data.columns, pd.MultiIndex):
@@ -28,7 +31,10 @@ class DataManager:
                 df.to_csv(self.filename, sep='\t')
         else:
             print(f"Downloading fresh history for {self.ticker}...")
-            df = yf.download(self.ticker, period=period, interval=interval, auto_adjust=True)
+            df = yf.download(self.ticker,
+                             period=period,
+                             interval=interval,
+                             auto_adjust=True)
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
             df.index = df.index.tz_convert('US/Eastern')

@@ -47,11 +47,26 @@ class OliverVelezEngine:
     def process_bar(self, has_position: bool, is_long: bool, current_dt,
                     s20: float, s200: float, atr: float,
                     c_open: float, c_high: float, c_low: float, c_close: float,
-                    prev_high_finder_func=None, prev_low_finder_func=None):  # 🛠️ FIXED PARAMETER SIGNATURE
+                    prev_high_finder_func=None, prev_low_finder_func=None):
+        # 🛠️ FIXED PARAMETER SIGNATURE
         """
         100% Encapsulated Oliver Velez Trading Logic Engine.
         Processes a single live candle stream to issue strict, risk-insulated execution orders.
         """
+
+        ######### begin input parameter debug info
+        print(f"\n[ENGINE-IN] >>> Entering process_bar for Datetime: {current_dt} <<<")
+        print(f"  [Position State]  Has Position: {has_position} | Is Long: {is_long}")
+        print(f"  [Moving Averages] 20 MA: {s20:.2f} | 200 SMA: {s200:.2f} | ATR: {atr:.2f}")
+        print(f"  [Candle Metrics]  Open: {c_open:.2f} | High: {c_high:.2f} | Low: {c_low:.2f} | Close: {c_close:.2f}")
+        print(f"  [Helper Funcs]    Has High Finder: {prev_high_finder_func is not None} | Has Low Finder: {prev_low_finder_func is not None}")
+        print("-" * 50)
+        ######### end input parameter debug info
+        ######### begin temporary attribute mapper
+        print("\n[DIAGNOSTIC] Listing all active engine properties:")
+        engine_attributes = [attr for attr in dir(self) if not attr.startswith('__') and not callable(getattr(self, attr))]
+        print(f"  Available Engine Variables: {engine_attributes}")
+        ######### end temporary attribute mapper
 
         # --- PHASE 1: STREAM BUFFER WARM-UP ---
         if self.p_close is None:

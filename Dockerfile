@@ -23,6 +23,9 @@ gpgkey=https://repo.radeon.com/rocm/rocm.gpg.key" > /etc/yum.repos.d/rocm.repo \
     tar \
     gzip \
     which \
+    ncurses \
+    vim \
+    jq \
     elfutils-libelf \
     numactl-libs \
     pciutils-libs \
@@ -33,6 +36,7 @@ gpgkey=https://repo.radeon.com/rocm/rocm.gpg.key" > /etc/yum.repos.d/rocm.repo \
     && rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm \
     && ln -sf /usr/bin/python3.12 /usr/bin/python \
     && ln -sf /usr/bin/pip3.12 /usr/bin/pip \
+    && alias vi=vim \
     && pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir \
     torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm5.7 --break-system-packages \
